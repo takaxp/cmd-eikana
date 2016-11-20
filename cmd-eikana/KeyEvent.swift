@@ -11,6 +11,7 @@ import Cocoa
 class KeyEvent: NSObject {
     var keyCode: UInt16? = nil
     var imeStatus: Bool = false
+    var mode = 2 // {0: the original mode, 1: Shift-Space to toggle IME, 2: Right cmd to toggle IME }
     
     override init() {
         super.init()
@@ -60,6 +61,24 @@ class KeyEvent: NSObject {
         CGEvent(keyboardEventSource: nil, virtualKey: 51, keyDown: true)?.post(tap: loc)
         CGEvent(keyboardEventSource: nil, virtualKey: 51, keyDown: false)?.post(tap: loc)
     }
+    
+    func toggleIME() {
+        if self.imeStatus == true {
+            // IME off
+            self.setEisu()
+            self.imeStatus = false;
+            #if DEBUG
+                print("ime OFF")
+            #endif
+        }else{
+            // IME on
+            self.setKana()
+            self.imeStatus = true;
+            #if DEBUG
+                print("ime ON")
+            #endif
+        }
+    }
 
     func watch () {
         let masks = [
@@ -81,78 +100,71 @@ class KeyEvent: NSObject {
         for mask in masks {
             NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler)
         }
-        
-        NSEvent.addGlobalMonitorForEvents(matching: NSEventMask.keyDown , handler: {(event: NSEvent!) -> Void in
 
-            #if DEBUG
-            print(self.keyCode)
-            #endif
-
-            if ( event.keyCode != 49 ){
-                return;
-            }
-            if ( !event.modifierFlags.contains(.shift)
-                || event.modifierFlags.contains(.command)
-                || event.modifierFlags.contains(.option)
-                || event.modifierFlags.contains(.control)){
-                return;
-            }
-
-            #if DEBUG
-            print("value: ", event)
-            #endif
-
-            self.removeSpace()
-
-            if self.imeStatus == true {
-                // IME off
-                self.setEisu()
-                self.imeStatus = false;
+        if self.mode == 1 {
+            NSEvent.addGlobalMonitorForEvents(matching: NSEventMask.keyDown , handler: {(event: NSEvent!) -> Void in
+                
                 #if DEBUG
-                print("ime OFF")
+                    print(self.keyCode)
                 #endif
-            }else{
-                // IME on
-                self.setKana()
-                self.imeStatus = true;
+                
+                if ( event.keyCode != 49 ){
+                    return;
+                }
+                if ( !event.modifierFlags.contains(.shift)
+                    || event.modifierFlags.contains(.command)
+                    || event.modifierFlags.contains(.option)
+                    || event.modifierFlags.contains(.control)){
+                    return;
+                }
+                
                 #if DEBUG
-                print("ime ON")
+                    print("value: ", event)
                 #endif
-            }
-        })
-
-
-        #if true
-        NSEvent.addGlobalMonitorForEvents(matching: NSEventMask.flagsChanged, handler: {(evevt: NSEvent!) -> Void in
-            if evevt.keyCode == 55 { // 左コマンドキー
-                if evevt.modifierFlags.contains(.command) {
-                    self.keyCode = 55
+                
+                self.removeSpace()
+                self.toggleIME()
+                
+            })
+            
+        }else{ // mode == {0, 2}
+            
+            NSEvent.addGlobalMonitorForEvents(matching: NSEventMask.flagsChanged, handler: {(evevt: NSEvent!) -> Void in
+                if evevt.keyCode == 55 { // 左コマンドキー
+                    if self.mode == 0 {
+                        
+                        if evevt.modifierFlags.contains(.command) {
+                            self.keyCode = 55
+                        }
+                        else if self.keyCode == 55 {
+                            #if DEBUG
+                                print("英数")
+                            #endif
+                            
+                            self.setEisu()
+                        }
+                    }
                 }
-                else if self.keyCode == 55 {
-                    #if DEBUG
-                    print("英数")
-                    #endif
-
-                    self.setEisu()
+                else if evevt.keyCode == 54 { // 右コマンドキー
+                    if evevt.modifierFlags.contains(.command) {
+                        self.keyCode = 54
+                    }
+                    else if self.keyCode == 54 {
+                        #if DEBUG
+                            print("かな")
+                        #endif
+                        
+                        if self.mode == 0 {
+                            self.setKana()
+                        }else if self.mode == 2 {
+                            self.toggleIME()
+                        }
+                    }
                 }
-            }
-            else if evevt.keyCode == 54 { // 右コマンドキー
-                if evevt.modifierFlags.contains(.command) {
-                    self.keyCode = 54
+                else {
+                    self.keyCode = nil;
                 }
-                else if self.keyCode == 54 {
-                    #if DEBUG
-                    print("かな")
-                    #endif
-
-                    self.setKana()
-                }
-            }
-            else {
-                self.keyCode = nil;
-            }
-        })
-        #endif
-        
+            })
+        }
     }
 }
